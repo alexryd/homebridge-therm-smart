@@ -1,0 +1,15 @@
+{
+  "name": "homebridge-thermsmart-sensor",
+  "version": "0.0.1",
+  "description": "THERMSmart Sensor plugin for homebridge",
+  "author": "Alexander Rydén",
+  "license": "ISC",
+  "main": "index.js",
+  "keywords": [
+    "homebridge-plugin"
+  ],
+  "engines": {
+    "node": ">=6.4.0",
+    "homebridge": ">=0.2.0"
+  }
+}
