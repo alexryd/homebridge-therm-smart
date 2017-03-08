@@ -19,15 +19,20 @@ const ThermSmart = {
     })
   },
 
-  scan() {
+  scan(address=null) {
     return ThermSmart.isPoweredOn().then(() => {
       return new Promise((resolve, reject) => {
         const discoverHandler = peripheral => {
-          noble.removeListener('discover', discoverHandler)
-          noble.removeListener('stateChange', stateChangeHandler)
-          noble.stopScanning()
-          resolve(peripheral)
+          if (address === null || address === peripheral.address) {
+            noble.removeListener('discover', discoverHandler)
+            noble.removeListener('stateChange', stateChangeHandler)
+            noble.stopScanning()
+            resolve(peripheral)
+          } else {
+            console.log('Skipping sensor with address', peripheral.address)
+          }
         }
+
         const stateChangeHandler = state => {
           if (state !== 'poweredOn') {
             noble.removeListener('discover', discoverHandler)
@@ -37,10 +42,15 @@ const ThermSmart = {
           }
         }
 
-        noble.on('discover', discoverHandler)
-        noble.on('stateChange', stateChangeHandler)
+        noble.startScanning([SERVICE_UUID], true, error => {
+          if (error) {
+            reject('Failed to scan for sensors: ' + error)
+            return
+          }
 
-        noble.startScanning([SERVICE_UUID], true)
+          noble.on('discover', discoverHandler)
+          noble.on('stateChange', stateChangeHandler)
+        })
       })
     })
   }
