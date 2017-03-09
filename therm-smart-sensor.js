@@ -52,9 +52,12 @@ class ThermSmartSensor {
         const discoverHandler = peripheral => {
           if (this.address === null || this.address === peripheral.address) {
             this.peripheral = peripheral
+            peripheral.once('disconnect', this.handleDisconnect.bind(this))
+
             noble.removeListener('discover', discoverHandler)
             noble.removeListener('stateChange', stateChangeHandler)
             noble.stopScanning()
+
             this.log('Found sensor with address', peripheral.address)
             resolve(peripheral)
           } else {
@@ -130,6 +133,14 @@ class ThermSmartSensor {
         })
       })
     })
+  }
+
+  handleDisconnect() {
+    this.log('Sensor was disconnected')
+    this.peripheral = null
+    this.writeCharacteristic = null
+    this.notifyCharacteristic = null
+    this.temperatureData = null
   }
 
   loadTemperatureData() {
