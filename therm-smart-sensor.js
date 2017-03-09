@@ -11,7 +11,8 @@ const readTemperature = (data, position) => {
 }
 
 class ThermSmartSensor {
-  constructor(address=null) {
+  constructor(address=null, log=null) {
+    this.log = log || console.log
     this.address = address
     this.peripheral = null
     this.writeCharacteristic = null
@@ -31,7 +32,9 @@ class ThermSmartSensor {
           resolve()
         }
       }
+
       noble.on('stateChange', stateChangeHandler)
+      this.log('Waiting for Bluetooth device to power on...')
     })
   }
 
@@ -48,9 +51,10 @@ class ThermSmartSensor {
             noble.removeListener('discover', discoverHandler)
             noble.removeListener('stateChange', stateChangeHandler)
             noble.stopScanning()
+            this.log('Found sensor with address', peripheral.address)
             resolve(peripheral)
           } else {
-            console.log('Skipping sensor with address', peripheral.address)
+            this.log('Skipping sensor with address', peripheral.address)
           }
         }
 
@@ -71,6 +75,7 @@ class ThermSmartSensor {
 
           noble.on('discover', discoverHandler)
           noble.on('stateChange', stateChangeHandler)
+          this.log('Scanning for sensors...')
         })
       })
     })
@@ -83,6 +88,7 @@ class ThermSmartSensor {
       }
 
       return new Promise((resolve, reject) => {
+        this.log('Connecting to sensor...')
         peripheral.connect(error => {
           if (error) {
             reject('Failed to connect to sensor: ' + error)
@@ -112,6 +118,7 @@ class ThermSmartSensor {
                   return
                 }
 
+                this.log('Sensor connected')
                 resolve(peripheral)
               })
             }
@@ -132,12 +139,14 @@ class ThermSmartSensor {
           if (isNotification && data.readUInt8(0) === GET_TEMPERATURE_COMMAND) {
             this.data = data
             this.notifyCharacteristic.removeListener('data', dataHandler)
+            this.log('Data loaded')
             resolve(data)
           }
         }
 
         this.notifyCharacteristic.on('data', dataHandler)
 
+        this.log('Loading data...')
         const command = new Buffer([GET_TEMPERATURE_COMMAND])
         this.writeCharacteristic.write(command, false, error => {
           if (error) {
