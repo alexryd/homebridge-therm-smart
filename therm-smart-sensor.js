@@ -15,9 +15,11 @@ const readRelativeHumidity = (data, position) => {
 }
 
 class ThermSmartSensor {
-  constructor(address=null, log=null) {
+  constructor(address=null, dataTtl=15, log=null) {
     this.log = log || console.log
     this.address = address
+    this.dataTtl = dataTtl
+    this.dataTimeout = null
     this.peripheral = null
     this.writeCharacteristic = null
     this.notifyCharacteristic = null
@@ -140,7 +142,7 @@ class ThermSmartSensor {
     this.peripheral = null
     this.writeCharacteristic = null
     this.notifyCharacteristic = null
-    this.temperatureData = null
+    this.setTemperatureData(null)
   }
 
   loadTemperatureData() {
@@ -152,7 +154,7 @@ class ThermSmartSensor {
       return new Promise((resolve, reject) => {
         const dataHandler = (data, isNotification) => {
           if (isNotification && data.readUInt8(0) === GET_TEMPERATURE_COMMAND) {
-            this.temperatureData = data
+            this.setTemperatureData(data)
             this.notifyCharacteristic.removeListener('data', dataHandler)
             this.log('Temperature data loaded')
             resolve(data)
@@ -171,6 +173,21 @@ class ThermSmartSensor {
         })
       })
     })
+  }
+
+  setTemperatureData(data) {
+    this.temperatureData = data
+
+    if (this.dataTimeout !== null) {
+      clearTimeout(this.dataTimeout)
+      this.dataTimeout = null
+    }
+
+    if (data !== null) {
+      this.dataTimeout = setTimeout(() => {
+        this.setTemperatureData(null)
+      }, this.dataTtl * 1000)
+    }
   }
 
   getIndoorTemperature() {
