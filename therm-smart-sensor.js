@@ -4,6 +4,8 @@ const SERVICE_UUID = 'fff0'
 const WRITE_CHARACTERISTIC_UUID = 'fff3'
 const NOTIFY_CHARACTERISTIC_UUID = 'fff4'
 
+const GET_TEMPERATURE_COMMAND = 0xd2
+
 const readTemperature = (data, position) => {
   return (data.readUInt16LE(position) - 0x3000) / 20
 }
@@ -127,7 +129,7 @@ class ThermSmartSensor {
 
       return new Promise((resolve, reject) => {
         const dataHandler = (data, isNotification) => {
-          if (isNotification && data.readUInt8(0) === 0xd2) {
+          if (isNotification && data.readUInt8(0) === GET_TEMPERATURE_COMMAND) {
             this.data = data
             this.notifyCharacteristic.removeListener('data', dataHandler)
             resolve(data)
@@ -136,7 +138,7 @@ class ThermSmartSensor {
 
         this.notifyCharacteristic.on('data', dataHandler)
 
-        const command = new Buffer([0xd2])
+        const command = new Buffer([GET_TEMPERATURE_COMMAND])
         this.writeCharacteristic.write(command, false, error => {
           if (error) {
             this.notifyCharacteristic.removeListener('data', dataHandler)
