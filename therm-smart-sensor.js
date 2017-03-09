@@ -10,6 +10,10 @@ const readTemperature = (data, position) => {
   return (data.readUInt16LE(position) - 0x3000) / 20
 }
 
+const readRelativeHumidity = (data, position) => {
+  return parseInt(data.toString('hex', position, position + 1))
+}
+
 class ThermSmartSensor {
   constructor(address=null, log=null) {
     this.log = log || console.log
@@ -161,6 +165,12 @@ class ThermSmartSensor {
   getIndoorTemperature() {
     return this.update().then(data => {
       return readTemperature(data, 3)
+    })
+  }
+
+  getRelativeHumidity() {
+    return this.update().then(data => {
+      return readRelativeHumidity(data, 9)
     })
   }
 
