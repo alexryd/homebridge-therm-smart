@@ -21,7 +21,7 @@ class ThermSmartSensor {
     this.peripheral = null
     this.writeCharacteristic = null
     this.notifyCharacteristic = null
-    this.data = null
+    this.temperatureData = null
   }
 
   isPoweredOn() {
@@ -132,25 +132,25 @@ class ThermSmartSensor {
     })
   }
 
-  update() {
+  loadTemperatureData() {
     return this.connect().then(() => {
-      if (this.data !== null) {
-        return Promise.resolve(this.data)
+      if (this.temperatureData !== null) {
+        return Promise.resolve(this.temperatureData)
       }
 
       return new Promise((resolve, reject) => {
         const dataHandler = (data, isNotification) => {
           if (isNotification && data.readUInt8(0) === GET_TEMPERATURE_COMMAND) {
-            this.data = data
+            this.temperatureData = data
             this.notifyCharacteristic.removeListener('data', dataHandler)
-            this.log('Data loaded')
+            this.log('Temperature data loaded')
             resolve(data)
           }
         }
 
         this.notifyCharacteristic.on('data', dataHandler)
 
-        this.log('Loading data...')
+        this.log('Loading temperature data...')
         const command = new Buffer([GET_TEMPERATURE_COMMAND])
         this.writeCharacteristic.write(command, false, error => {
           if (error) {
@@ -163,19 +163,19 @@ class ThermSmartSensor {
   }
 
   getIndoorTemperature() {
-    return this.update().then(data => {
+    return this.loadTemperatureData().then(data => {
       return readTemperature(data, 3)
     })
   }
 
   getRelativeHumidity() {
-    return this.update().then(data => {
+    return this.loadTemperatureData().then(data => {
       return readRelativeHumidity(data, 9)
     })
   }
 
   getOutdoorTemperature() {
-    return this.update().then(data => {
+    return this.loadTemperatureData().then(data => {
       return readTemperature(data, 12)
     })
   }
