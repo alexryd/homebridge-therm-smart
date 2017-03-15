@@ -14,19 +14,14 @@ const readRelativeHumidity = (data, position) => {
   return parseInt(data.toString('hex', position, position + 1))
 }
 
-class ThermSmartSensor {
-  constructor(address=null, dataTtl=15, log=null) {
-    this.log = log || console.log
+class BluetoothSensor {
+  constructor(address=null, log=null) {
     this.address = address
-    this.dataTtl = dataTtl
-    this.dataTimeout = null
+    this.log = log || console.log
     this.peripheral = null
-    this.writeCharacteristic = null
-    this.notifyCharacteristic = null
-    this.temperatureData = null
   }
 
-  isPoweredOn() {
+  bluetoothIsPoweredOn() {
     if (noble.state === 'poweredOn') {
       return Promise.resolve()
     }
@@ -45,9 +40,9 @@ class ThermSmartSensor {
   }
 
   scan() {
-    return this.isPoweredOn().then(() => {
+    return this.bluetoothIsPoweredOn().then(() => {
       if (this.peripheral !== null) {
-        return Promise.resolve(this.peripheral)
+        return this.peripheral
       }
 
       return new Promise((resolve, reject) => {
@@ -93,7 +88,7 @@ class ThermSmartSensor {
   connect() {
     return this.scan().then(peripheral => {
       if (peripheral.state === 'connected') {
-        return Promise.resolve(peripheral)
+        return peripheral
       }
 
       return new Promise((resolve, reject) => {
@@ -104,35 +99,26 @@ class ThermSmartSensor {
             return
           }
 
-          peripheral.discoverSomeServicesAndCharacteristics(
-            [SERVICE_UUID],
-            [WRITE_CHARACTERISTIC_UUID, NOTIFY_CHARACTERISTIC_UUID],
-            (error2, services, characteristics) => {
-              if (error2) {
-                reject('Failed to discover services and characteristics: ' + error2)
-                return
-              }
-
-              characteristics.forEach(characteristic => {
-                if (characteristic.uuid === WRITE_CHARACTERISTIC_UUID) {
-                  this.writeCharacteristic = characteristic
-                } else if (characteristic.uuid === NOTIFY_CHARACTERISTIC_UUID) {
-                  this.notifyCharacteristic = characteristic
-                }
-              })
-
-              this.notifyCharacteristic.subscribe(error3 => {
-                if (error3) {
-                  reject('Failed to subscribe to characteristic: ' + error3)
-                  return
-                }
-
-                this.log('Sensor connected')
-                resolve(peripheral)
-              })
-            }
-          )
+          this.log('Sensor connected')
+          resolve(peripheral)
         })
+      })
+    })
+  }
+
+  disconnect() {
+    if (this.peripheral === null) {
+      return Promise.resolve()
+    }
+
+    return new Promise((resolve, reject) => {
+      this.peripheral.disconnect(error => {
+        if (error) {
+          reject('Failed to disconnect from sensor: ' + error)
+          return
+        }
+
+        resolve()
       })
     })
   }
@@ -140,6 +126,67 @@ class ThermSmartSensor {
   handleDisconnect() {
     this.log('Sensor was disconnected')
     this.peripheral = null
+  }
+}
+
+class ThermSmartSensor extends BluetoothSensor {
+  constructor(address=null, dataTtl=15, log=null) {
+    super(address, log)
+
+    this.dataTtl = dataTtl
+    this.dataTimeout = null
+    this.isConnected = false
+    this.writeCharacteristic = null
+    this.notifyCharacteristic = null
+    this.temperatureData = null
+  }
+
+  connect() {
+    if (this.isConnected) {
+      return Promise.resolve()
+    }
+
+    return super.connect().then(peripheral => {
+      return new Promise((resolve, reject) => {
+        this.log('Discovering characteristics...')
+        peripheral.discoverSomeServicesAndCharacteristics(
+          [SERVICE_UUID],
+          [WRITE_CHARACTERISTIC_UUID, NOTIFY_CHARACTERISTIC_UUID],
+          (error, services, characteristics) => {
+            if (error) {
+              reject('Failed to discover characteristics: ' + error)
+              return
+            }
+
+            characteristics.forEach(characteristic => {
+              if (characteristic.uuid === WRITE_CHARACTERISTIC_UUID) {
+                this.writeCharacteristic = characteristic
+              } else if (characteristic.uuid === NOTIFY_CHARACTERISTIC_UUID) {
+                this.notifyCharacteristic = characteristic
+              }
+            })
+
+            this.log('Subscribing to notifications...')
+            this.notifyCharacteristic.subscribe(error2 => {
+              if (error2) {
+                reject('Failed to subscribe to notifications: ' + error2)
+                return
+              }
+
+              this.log('Subscribed to notifications')
+              this.isConnected = true
+              resolve()
+            })
+          }
+        )
+      })
+    })
+  }
+
+  handleDisconnect() {
+    super.handleDisconnect()
+
+    this.isConnected = false
     this.writeCharacteristic = null
     this.notifyCharacteristic = null
     this.setTemperatureData(null)
