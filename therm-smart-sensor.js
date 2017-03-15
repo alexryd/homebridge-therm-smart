@@ -133,12 +133,12 @@ class ThermSmartSensor extends BluetoothSensor {
   constructor(address=null, dataTtl=15, log=null) {
     super(address, log)
 
-    this.dataTtl = dataTtl
-    this.dataTimeout = null
     this.isConnected = false
     this.writeCharacteristic = null
     this.notifyCharacteristic = null
     this.temperatureData = null
+    this.temperatureDataLoadedAt = 0
+    this.dataTtl = dataTtl
   }
 
   connect() {
@@ -202,8 +202,8 @@ class ThermSmartSensor extends BluetoothSensor {
 
   loadTemperatureData() {
     return this.connect().then(() => {
-      if (this.temperatureData !== null) {
-        return Promise.resolve(this.temperatureData)
+      if (this.getTemperatureData() !== null) {
+        return Promise.resolve(this.getTemperatureData())
       }
 
       return new Promise((resolve, reject) => {
@@ -232,17 +232,15 @@ class ThermSmartSensor extends BluetoothSensor {
 
   setTemperatureData(data) {
     this.temperatureData = data
+    this.temperatureDataLoadedAt = new Date().getTime()
+  }
 
-    if (this.dataTimeout !== null) {
-      clearTimeout(this.dataTimeout)
-      this.dataTimeout = null
+  getTemperatureData() {
+    if ((new Date().getTime() - this.temperatureDataLoadedAt) / 1000 > this.dataTtl) {
+      return null
     }
 
-    if (data !== null) {
-      this.dataTimeout = setTimeout(() => {
-        this.setTemperatureData(null)
-      }, this.dataTtl * 1000)
-    }
+    return this.temperatureData
   }
 
   getIndoorTemperature() {
