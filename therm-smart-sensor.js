@@ -148,12 +148,18 @@ class ThermSmartSensor extends BluetoothSensor {
 
     return super.connect().then(peripheral => {
       return new Promise((resolve, reject) => {
+        const disconnectHandler = () => {
+          reject('Sensor disconnected unexpectedly')
+        }
+        peripheral.once('disconnect', disconnectHandler)
+
         this.log('Discovering characteristics...')
         peripheral.discoverSomeServicesAndCharacteristics(
           [SERVICE_UUID],
           [WRITE_CHARACTERISTIC_UUID, NOTIFY_CHARACTERISTIC_UUID],
           (error, services, characteristics) => {
             if (error) {
+              peripheral.removeListener('disconnect', disconnectHandler)
               reject('Failed to discover characteristics: ' + error)
               return
             }
@@ -168,6 +174,8 @@ class ThermSmartSensor extends BluetoothSensor {
 
             this.log('Subscribing to notifications...')
             this.notifyCharacteristic.subscribe(error2 => {
+              peripheral.removeListener('disconnect', disconnectHandler)
+
               if (error2) {
                 reject('Failed to subscribe to notifications: ' + error2)
                 return
