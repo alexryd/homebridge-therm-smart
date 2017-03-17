@@ -4,7 +4,7 @@ const SERVICE_UUID = 'fff0'
 const WRITE_CHARACTERISTIC_UUID = 'fff3'
 const NOTIFY_CHARACTERISTIC_UUID = 'fff4'
 
-const GET_TEMPERATURE_COMMAND = 0xd2
+const GET_SENSOR_DATA_COMMAND = 0xd2
 
 const readTemperature = (data, position) => {
   return (data.readUInt16LE(position) - 0x3000) / 20
@@ -136,9 +136,9 @@ class ThermSmartSensor extends BluetoothSensor {
     this.isConnected = false
     this.writeCharacteristic = null
     this.notifyCharacteristic = null
-    this.loadTemperatureDataPromise = null
-    this.temperatureData = null
-    this.temperatureDataLoadedAt = 0
+    this.loadSensorDataPromise = null
+    this.sensorData = null
+    this.sensorDataLoadedAt = 0
     this.dataTtl = dataTtl
   }
 
@@ -198,75 +198,75 @@ class ThermSmartSensor extends BluetoothSensor {
     this.isConnected = false
     this.writeCharacteristic = null
     this.notifyCharacteristic = null
-    this.setTemperatureData(null)
+    this.setSensorData(null)
   }
 
-  loadTemperatureData() {
-    if (this.loadTemperatureDataPromise !== null) {
-      return this.loadTemperatureDataPromise
+  loadSensorData() {
+    if (this.loadSensorDataPromise !== null) {
+      return this.loadSensorDataPromise
     }
 
-    this.loadTemperatureDataPromise = this.connect().then(() => {
-      if (this.getTemperatureData() !== null) {
-        this.loadTemperatureDataPromise = null
-        return this.getTemperatureData()
+    this.loadSensorDataPromise = this.connect().then(() => {
+      if (this.getSensorData() !== null) {
+        this.loadSensorDataPromise = null
+        return this.getSensorData()
       }
 
       return new Promise((resolve, reject) => {
         const dataHandler = (data, isNotification) => {
-          if (isNotification && data.readUInt8(0) === GET_TEMPERATURE_COMMAND) {
-            this.setTemperatureData(data)
+          if (isNotification && data.readUInt8(0) === GET_SENSOR_DATA_COMMAND) {
+            this.setSensorData(data)
             this.notifyCharacteristic.removeListener('data', dataHandler)
-            this.loadTemperatureDataPromise = null
-            this.log('Temperature data loaded')
+            this.loadSensorDataPromise = null
+            this.log('Sensor data loaded')
             resolve(data)
           }
         }
 
         this.notifyCharacteristic.on('data', dataHandler)
 
-        this.log('Loading temperature data...')
-        const command = new Buffer([GET_TEMPERATURE_COMMAND])
+        this.log('Loading sensor data...')
+        const command = new Buffer([GET_SENSOR_DATA_COMMAND])
         this.writeCharacteristic.write(command, false, error => {
           if (error) {
             this.notifyCharacteristic.removeListener('data', dataHandler)
-            this.loadTemperatureDataPromise = null
+            this.loadSensorDataPromise = null
             reject('Failed to write to characteristic: ' + error)
           }
         })
       })
     })
 
-    return this.loadTemperatureDataPromise
+    return this.loadSensorDataPromise
   }
 
-  setTemperatureData(data) {
-    this.temperatureData = data
-    this.temperatureDataLoadedAt = new Date().getTime()
+  setSensorData(data) {
+    this.sensorData = data
+    this.sensorDataLoadedAt = new Date().getTime()
   }
 
-  getTemperatureData() {
-    if ((new Date().getTime() - this.temperatureDataLoadedAt) / 1000 > this.dataTtl) {
+  getSensorData() {
+    if ((new Date().getTime() - this.sensorDataLoadedAt) / 1000 > this.dataTtl) {
       return null
     }
 
-    return this.temperatureData
+    return this.sensorData
   }
 
   getIndoorTemperature() {
-    return this.loadTemperatureData().then(data => {
+    return this.loadSensorData().then(data => {
       return readTemperature(data, 3)
     })
   }
 
   getRelativeHumidity() {
-    return this.loadTemperatureData().then(data => {
+    return this.loadSensorData().then(data => {
       return readRelativeHumidity(data, 9)
     })
   }
 
   getOutdoorTemperature() {
-    return this.loadTemperatureData().then(data => {
+    return this.loadSensorData().then(data => {
       return readTemperature(data, 12)
     })
   }
