@@ -136,6 +136,7 @@ class ThermSmartSensor extends BluetoothSensor {
     this.isConnected = false
     this.writeCharacteristic = null
     this.notifyCharacteristic = null
+    this.loadTemperatureDataPromise = null
     this.temperatureData = null
     this.temperatureDataLoadedAt = 0
     this.dataTtl = dataTtl
@@ -201,9 +202,14 @@ class ThermSmartSensor extends BluetoothSensor {
   }
 
   loadTemperatureData() {
-    return this.connect().then(() => {
+    if (this.loadTemperatureDataPromise !== null) {
+      return this.loadTemperatureDataPromise
+    }
+
+    this.loadTemperatureDataPromise = this.connect().then(() => {
       if (this.getTemperatureData() !== null) {
-        return Promise.resolve(this.getTemperatureData())
+        this.loadTemperatureDataPromise = null
+        return this.getTemperatureData()
       }
 
       return new Promise((resolve, reject) => {
@@ -211,6 +217,7 @@ class ThermSmartSensor extends BluetoothSensor {
           if (isNotification && data.readUInt8(0) === GET_TEMPERATURE_COMMAND) {
             this.setTemperatureData(data)
             this.notifyCharacteristic.removeListener('data', dataHandler)
+            this.loadTemperatureDataPromise = null
             this.log('Temperature data loaded')
             resolve(data)
           }
@@ -223,11 +230,14 @@ class ThermSmartSensor extends BluetoothSensor {
         this.writeCharacteristic.write(command, false, error => {
           if (error) {
             this.notifyCharacteristic.removeListener('data', dataHandler)
+            this.loadTemperatureDataPromise = null
             reject('Failed to write to characteristic: ' + error)
           }
         })
       })
     })
+
+    return this.loadTemperatureDataPromise
   }
 
   setTemperatureData(data) {
