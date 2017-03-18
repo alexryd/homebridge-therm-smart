@@ -5,7 +5,7 @@ module.exports = homebridge => {
     constructor(log, config) {
       this.log = log
       this.config = config
-      this.sensor = new ThermSmartSensor(config.address || null, config.dataTtl || 15, log)
+      this.sensor = new ThermSmartSensor(config, log)
     }
 
     getIndoorTemperature(callback) {

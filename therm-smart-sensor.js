@@ -15,9 +15,9 @@ const readRelativeHumidity = (data, position) => {
 }
 
 class BluetoothSensor {
-  constructor(address=null, log=null) {
-    this.address = address
+  constructor(config, log) {
     this.log = log || console.log
+    this.address = config.address || null
     this.peripheral = null
   }
 
@@ -130,8 +130,10 @@ class BluetoothSensor {
 }
 
 class ThermSmartSensor extends BluetoothSensor {
-  constructor(address=null, dataTtl=15, log=null) {
-    super(address, log)
+  constructor(config=null, log=null) {
+    const c = config || {}
+
+    super(config, log)
 
     this.isConnected = false
     this.writeCharacteristic = null
@@ -139,7 +141,7 @@ class ThermSmartSensor extends BluetoothSensor {
     this.loadSensorDataPromise = null
     this.sensorData = null
     this.sensorDataLoadedAt = 0
-    this.dataTtl = dataTtl
+    this.dataTtl = c.dataTtl || 15
   }
 
   connect() {
