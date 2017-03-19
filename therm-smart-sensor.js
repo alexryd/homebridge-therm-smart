@@ -237,6 +237,9 @@ class ThermSmartSensor extends BluetoothSensor {
           }
         })
       })
+    }).catch(reason => {
+      this.loadSensorDataPromise = null
+      return Promise.reject(reason)
     })
 
     return this.loadSensorDataPromise
