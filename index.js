@@ -20,7 +20,7 @@ module.exports = homebridge => {
 
     getIndoorTemperatureService() {
       const service = new homebridge.hap.Service.TemperatureSensor(
-        this.config.name,
+        this.config.indoorTemperatureSensorName || this.config.name + ' Indoor Temperature',
         'indoor'
       )
 
@@ -42,7 +42,9 @@ module.exports = homebridge => {
     }
 
     getRelativeHumidityService() {
-      const service = new homebridge.hap.Service.HumiditySensor(this.config.name)
+      const service = new homebridge.hap.Service.HumiditySensor(
+        this.config.humiditySensorName || this.config.name + ' Humidity'
+      )
 
       service
         .getCharacteristic(homebridge.hap.Characteristic.CurrentRelativeHumidity)
@@ -63,7 +65,7 @@ module.exports = homebridge => {
 
     getOutdoorTemperatureService() {
       const service = new homebridge.hap.Service.TemperatureSensor(
-        this.config.name,
+        this.config.outdoorTemperatureSensorName || this.config.name + ' Outdoor Temperature',
         'outdoor'
       )
 
