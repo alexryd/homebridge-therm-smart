@@ -129,6 +129,110 @@ class BluetoothSensor {
   }
 }
 
+class SensorDataHandler {
+  constructor(sensor, config, log) {
+    this.sensor = sensor
+    this.log = log
+    this.writeCharacteristic = null
+    this.notifyCharacteristic = null
+    this.promise = null
+    this._data = null
+    this.dataLoadedAt = 0
+    this.dataTtl = config.dataTtl || 15
+  }
+
+  connect(peripheral, services, characteristics) {
+    return new Promise((resolve, reject) => {
+      const disconnectHandler = () => {
+        reject('Sensor disconnected unexpectedly')
+      }
+      peripheral.once('disconnect', disconnectHandler)
+
+      characteristics.forEach(characteristic => {
+        if (characteristic.uuid === WRITE_CHARACTERISTIC_UUID) {
+          this.writeCharacteristic = characteristic
+        } else if (characteristic.uuid === NOTIFY_CHARACTERISTIC_UUID) {
+          this.notifyCharacteristic = characteristic
+        }
+      })
+
+      this.log('Subscribing to notifications...')
+      this.notifyCharacteristic.subscribe(error => {
+        peripheral.removeListener('disconnect', disconnectHandler)
+
+        if (error) {
+          reject('Failed to subscribe to notifications: ' + error)
+          return
+        }
+
+        this.log('Subscribed to notifications')
+        resolve()
+      })
+    })
+  }
+
+  handleDisconnect() {
+    this.writeCharacteristic = null
+    this.notifyCharacteristic = null
+    this.data = null
+  }
+
+  load() {
+    if (this.promise !== null) {
+      return this.promise
+    }
+
+    this.promise = this.sensor.connect().then(() => {
+      if (this.data !== null) {
+        this.promise = null
+        return this.data
+      }
+
+      return new Promise((resolve, reject) => {
+        const dataHandler = (data, isNotification) => {
+          if (isNotification && data.readUInt8(0) === GET_SENSOR_DATA_COMMAND) {
+            this.data = data
+            this.notifyCharacteristic.removeListener('data', dataHandler)
+            this.promise = null
+            this.log('Sensor data loaded')
+            resolve(data)
+          }
+        }
+
+        this.notifyCharacteristic.on('data', dataHandler)
+
+        this.log('Loading sensor data...')
+        const command = new Buffer([GET_SENSOR_DATA_COMMAND])
+        this.writeCharacteristic.write(command, false, error => {
+          if (error) {
+            this.notifyCharacteristic.removeListener('data', dataHandler)
+            this.promise = null
+            reject('Failed to write to characteristic: ' + error)
+          }
+        })
+      })
+    }).catch(reason => {
+      this.promise = null
+      return Promise.reject(reason)
+    })
+
+    return this.promise
+  }
+
+  set data(data) {
+    this._data = data
+    this.dataLoadedAt = new Date().getTime()
+  }
+
+  get data() {
+    if ((new Date().getTime() - this.dataLoadedAt) / 1000 > this.dataTtl) {
+      return null
+    }
+
+    return this._data
+  }
+}
+
 class ThermSmartSensor extends BluetoothSensor {
   constructor(config=null, log=null) {
     const c = config || {}
@@ -136,12 +240,7 @@ class ThermSmartSensor extends BluetoothSensor {
     super(config, log)
 
     this.isConnected = false
-    this.writeCharacteristic = null
-    this.notifyCharacteristic = null
-    this.loadSensorDataPromise = null
-    this.sensorData = null
-    this.sensorDataLoadedAt = 0
-    this.dataTtl = c.dataTtl || 15
+    this.sensorDataHandler = new SensorDataHandler(this, config, log)
   }
 
   connect() {
@@ -167,24 +266,8 @@ class ThermSmartSensor extends BluetoothSensor {
               return
             }
 
-            characteristics.forEach(characteristic => {
-              if (characteristic.uuid === WRITE_CHARACTERISTIC_UUID) {
-                this.writeCharacteristic = characteristic
-              } else if (characteristic.uuid === NOTIFY_CHARACTERISTIC_UUID) {
-                this.notifyCharacteristic = characteristic
-              }
-            })
-
-            this.log('Subscribing to notifications...')
-            this.notifyCharacteristic.subscribe(error2 => {
+            this.sensorDataHandler.connect(peripheral, services, characteristics).then(() => {
               peripheral.removeListener('disconnect', disconnectHandler)
-
-              if (error2) {
-                reject('Failed to subscribe to notifications: ' + error2)
-                return
-              }
-
-              this.log('Subscribed to notifications')
               this.isConnected = true
               resolve()
             })
@@ -196,82 +279,24 @@ class ThermSmartSensor extends BluetoothSensor {
 
   handleDisconnect() {
     super.handleDisconnect()
-
+    this.sensorDataHandler.handleDisconnect()
     this.isConnected = false
-    this.writeCharacteristic = null
-    this.notifyCharacteristic = null
-    this.setSensorData(null)
-  }
-
-  loadSensorData() {
-    if (this.loadSensorDataPromise !== null) {
-      return this.loadSensorDataPromise
-    }
-
-    this.loadSensorDataPromise = this.connect().then(() => {
-      if (this.getSensorData() !== null) {
-        this.loadSensorDataPromise = null
-        return this.getSensorData()
-      }
-
-      return new Promise((resolve, reject) => {
-        const dataHandler = (data, isNotification) => {
-          if (isNotification && data.readUInt8(0) === GET_SENSOR_DATA_COMMAND) {
-            this.setSensorData(data)
-            this.notifyCharacteristic.removeListener('data', dataHandler)
-            this.loadSensorDataPromise = null
-            this.log('Sensor data loaded')
-            resolve(data)
-          }
-        }
-
-        this.notifyCharacteristic.on('data', dataHandler)
-
-        this.log('Loading sensor data...')
-        const command = new Buffer([GET_SENSOR_DATA_COMMAND])
-        this.writeCharacteristic.write(command, false, error => {
-          if (error) {
-            this.notifyCharacteristic.removeListener('data', dataHandler)
-            this.loadSensorDataPromise = null
-            reject('Failed to write to characteristic: ' + error)
-          }
-        })
-      })
-    }).catch(reason => {
-      this.loadSensorDataPromise = null
-      return Promise.reject(reason)
-    })
-
-    return this.loadSensorDataPromise
-  }
-
-  setSensorData(data) {
-    this.sensorData = data
-    this.sensorDataLoadedAt = new Date().getTime()
-  }
-
-  getSensorData() {
-    if ((new Date().getTime() - this.sensorDataLoadedAt) / 1000 > this.dataTtl) {
-      return null
-    }
-
-    return this.sensorData
   }
 
   getIndoorTemperature() {
-    return this.loadSensorData().then(data => {
+    return this.sensorDataHandler.load().then(data => {
       return readTemperature(data, 3)
     })
   }
 
   getRelativeHumidity() {
-    return this.loadSensorData().then(data => {
+    return this.sensorDataHandler.load().then(data => {
       return readRelativeHumidity(data, 9)
     })
   }
 
   getOutdoorTemperature() {
-    return this.loadSensorData().then(data => {
+    return this.sensorDataHandler.load().then(data => {
       return readTemperature(data, 12)
     })
   }
