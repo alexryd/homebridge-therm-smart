@@ -232,9 +232,17 @@ class SensorDataHandler {
       }
 
       return new Promise((resolve, reject) => {
+        const disconnectHandler = () => {
+          this.notifyCharacteristic.removeListener('data', dataHandler)
+          this.promise = null
+          reject('Sensor disconnected unexpectedly')
+        }
+        this.sensor.peripheral.once('disconnect', disconnectHandler)
+
         const dataHandler = (data, isNotification) => {
           if (isNotification && data.readUInt8(0) === GET_SENSOR_DATA_COMMAND) {
             this.data = data
+            this.sensor.peripheral.removeListener('disconnect', disconnectHandler)
             this.notifyCharacteristic.removeListener('data', dataHandler)
             this.promise = null
             this.log('Sensor data loaded')
@@ -248,6 +256,7 @@ class SensorDataHandler {
         const command = new Buffer([GET_SENSOR_DATA_COMMAND])
         this.writeCharacteristic.write(command, false, error => {
           if (error) {
+            this.sensor.peripheral.removeListener('disconnect', disconnectHandler)
             this.notifyCharacteristic.removeListener('data', dataHandler)
             this.promise = null
             reject('Failed to write to characteristic: ' + error)
