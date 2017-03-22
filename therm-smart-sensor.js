@@ -19,6 +19,9 @@ class BluetoothSensor {
     this.log = log || console.log
     this.address = config.address || null
     this.peripheral = null
+    this.services = null
+    this.characteristics = null
+    this.isConnected = false
   }
 
   bluetoothIsPoweredOn() {
@@ -48,9 +51,6 @@ class BluetoothSensor {
       return new Promise((resolve, reject) => {
         const discoverHandler = peripheral => {
           if (this.address === null || this.address === peripheral.address) {
-            this.peripheral = peripheral
-            peripheral.once('disconnect', this.handleDisconnect.bind(this))
-
             noble.removeListener('discover', discoverHandler)
             noble.removeListener('stateChange', stateChangeHandler)
             noble.stopScanning()
@@ -86,7 +86,18 @@ class BluetoothSensor {
   }
 
   connect() {
+    if (this.isConnected) {
+      return Promise.resolve({
+        peripheral: this.peripheral,
+        services: this.services,
+        characteristics: this.characteristics
+      })
+    }
+
     return this.scan().then(peripheral => {
+      this.peripheral = peripheral
+      peripheral.once('disconnect', this.handleDisconnect.bind(this))
+
       if (peripheral.state === 'connected') {
         return peripheral
       }
@@ -103,6 +114,35 @@ class BluetoothSensor {
           resolve(peripheral)
         })
       })
+    })
+    .then(this.discoverServicesAndCharacteristics.bind(this))
+  }
+
+  discoverServicesAndCharacteristics(peripheral) {
+    return new Promise((resolve, reject) => {
+      const disconnectHandler = () => {
+        reject('Sensor disconnected unexpectedly')
+      }
+      peripheral.once('disconnect', disconnectHandler)
+
+      this.log('Discovering characteristics...')
+      peripheral.discoverSomeServicesAndCharacteristics(
+        [SERVICE_UUID],
+        [WRITE_CHARACTERISTIC_UUID, NOTIFY_CHARACTERISTIC_UUID],
+        (error, services, characteristics) => {
+          peripheral.removeListener('disconnect', disconnectHandler)
+
+          if (error) {
+            reject('Failed to discover characteristics: ' + error)
+            return
+          }
+
+          this.services = services
+          this.characteristics = characteristics
+          this.isConnected = true
+          resolve({peripheral, services, characteristics})
+        }
+      )
     })
   }
 
@@ -126,6 +166,9 @@ class BluetoothSensor {
   handleDisconnect() {
     this.log('Sensor was disconnected')
     this.peripheral = null
+    this.services = null
+    this.characteristics = null
+    this.isConnected = false
   }
 }
 
@@ -239,7 +282,6 @@ class ThermSmartSensor extends BluetoothSensor {
 
     super(config, log)
 
-    this.isConnected = false
     this.sensorDataHandler = new SensorDataHandler(this, config, log)
   }
 
@@ -248,39 +290,14 @@ class ThermSmartSensor extends BluetoothSensor {
       return Promise.resolve()
     }
 
-    return super.connect().then(peripheral => {
-      return new Promise((resolve, reject) => {
-        const disconnectHandler = () => {
-          reject('Sensor disconnected unexpectedly')
-        }
-        peripheral.once('disconnect', disconnectHandler)
-
-        this.log('Discovering characteristics...')
-        peripheral.discoverSomeServicesAndCharacteristics(
-          [SERVICE_UUID],
-          [WRITE_CHARACTERISTIC_UUID, NOTIFY_CHARACTERISTIC_UUID],
-          (error, services, characteristics) => {
-            if (error) {
-              peripheral.removeListener('disconnect', disconnectHandler)
-              reject('Failed to discover characteristics: ' + error)
-              return
-            }
-
-            this.sensorDataHandler.connect(peripheral, services, characteristics).then(() => {
-              peripheral.removeListener('disconnect', disconnectHandler)
-              this.isConnected = true
-              resolve()
-            })
-          }
-        )
-      })
+    return super.connect().then(({peripheral, services, characteristics}) => {
+      return this.sensorDataHandler.connect(peripheral, services, characteristics)
     })
   }
 
   handleDisconnect() {
     super.handleDisconnect()
     this.sensorDataHandler.handleDisconnect()
-    this.isConnected = false
   }
 
   getIndoorTemperature() {
