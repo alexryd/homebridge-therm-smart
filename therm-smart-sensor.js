@@ -126,9 +126,7 @@ class BluetoothSensor {
       peripheral.once('disconnect', disconnectHandler)
 
       this.log('Discovering characteristics...')
-      peripheral.discoverSomeServicesAndCharacteristics(
-        [SERVICE_UUID],
-        [WRITE_CHARACTERISTIC_UUID, NOTIFY_CHARACTERISTIC_UUID],
+      peripheral.discoverAllServicesAndCharacteristics(
         (error, services, characteristics) => {
           peripheral.removeListener('disconnect', disconnectHandler)
 
@@ -169,6 +167,53 @@ class BluetoothSensor {
     this.services = null
     this.characteristics = null
     this.isConnected = false
+  }
+}
+
+class BatteryLevelHandler {
+  constructor(sensor, config, log) {
+    this.sensor = sensor
+    this.log = log
+    this.data = null
+  }
+
+  connect(peripheral, services, characteristics) {
+    return new Promise((resolve, reject) => {
+      const disconnectHandler = () => {
+        reject('Sensor disconnected unexpectedly')
+      }
+      peripheral.once('disconnect', disconnectHandler)
+
+      const characteristic = characteristics.find(c => {
+        return c.type === 'org.bluetooth.characteristic.battery_level'
+      })
+
+      if (characteristic) {
+        characteristic.read((error, data) => {
+          peripheral.removeListener('disconnect', disconnectHandler)
+
+          if (error) {
+            reject('Failed to read battery level: ' + error)
+            return
+          }
+
+          this.data = data
+          resolve()
+        })
+      } else {
+        peripheral.removeListener('disconnect', disconnectHandler)
+        this.log('No battery level characteristic found')
+        resolve()
+      }
+    })
+  }
+
+  handleDisconnect() {
+    this.data = null
+  }
+
+  load() {
+    return this.sensor.connect().then(() => this.data)
   }
 }
 
@@ -292,6 +337,7 @@ class ThermSmartSensor extends BluetoothSensor {
 
     super(c, l)
 
+    this.batteryLevelHandler = new BatteryLevelHandler(this, c, l)
     this.sensorDataHandler = new SensorDataHandler(this, c, l)
   }
 
@@ -301,13 +347,23 @@ class ThermSmartSensor extends BluetoothSensor {
     }
 
     return super.connect().then(({peripheral, services, characteristics}) => {
-      return this.sensorDataHandler.connect(peripheral, services, characteristics)
+      return Promise.all([
+        this.batteryLevelHandler.connect(peripheral, services, characteristics),
+        this.sensorDataHandler.connect(peripheral, services, characteristics)
+      ])
     })
   }
 
   handleDisconnect() {
     super.handleDisconnect()
+    this.batteryLevelHandler.handleDisconnect()
     this.sensorDataHandler.handleDisconnect()
+  }
+
+  getBatteryLevel() {
+    return this.batteryLevelHandler.load().then(data => {
+      return data.readUInt8()
+    })
   }
 
   getIndoorTemperature() {
