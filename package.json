@@ -14,5 +14,9 @@
   },
   "dependencies": {
     "noble": "~1.8.0"
+  },
+  "devDependencies": {
+    "colors": "^1.1.2",
+    "command-line-args": "^4.0.7"
   }
 }
