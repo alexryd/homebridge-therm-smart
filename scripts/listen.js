@@ -16,12 +16,14 @@ if (help) {
 
 const readingHandler = reading => {
   const msg = [
-    reading.sensor,
-    '-',
     reading.type,
     ': ',
     colors.green(reading.value),
   ]
+
+  if (reading.sensor) {
+    msg.unshift(reading.sensor, '-')
+  }
 
   const symbol = reading.symbol
   if (symbol) {
