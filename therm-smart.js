@@ -9,6 +9,10 @@ const SERVICE_UUID = 'fff0'
 const WRITE_CHARACTERISTIC_UUID = 'fff3'
 const NOTIFY_CHARACTERISTIC_UUID = 'fff4'
 
+const bcdByteToInt = b => {
+  return (((b & 0xf0) >> 4) * 10) + (b & 0xf)
+}
+
 class ThermSmart extends EventEmitter {
   static powerOn() {
     if (noble.state === 'poweredOn') {
@@ -226,8 +230,8 @@ class ThermSmart extends EventEmitter {
 
   write(data, responseCommand) {
     return new Promise((resolve, reject) => {
-      const dataHandler = (receivedData, isNotification) => {
-        if (isNotification && receivedData.readUInt8(0) === responseCommand) {
+      const dataHandler = (receivedData) => {
+        if (receivedData[0] === responseCommand) {
           this.notifyCharacteristic.removeListener('data', dataHandler)
           resolve(receivedData)
         }
@@ -242,6 +246,20 @@ class ThermSmart extends EventEmitter {
         }
       })
     })
+  }
+
+  readTime() {
+    return this.write(Buffer.from([0xd1, 0x01]), 0xd1)
+      .then(data => {
+        return new Date(
+          bcdByteToInt(data[2]) + 2000,
+          bcdByteToInt(data[3]) - 1,
+          bcdByteToInt(data[4]),
+          bcdByteToInt(data[5]),
+          bcdByteToInt(data[6]),
+          bcdByteToInt(data[7])
+        )
+      })
   }
 }
 
