@@ -39,7 +39,7 @@ const parseTemperature = (data, position) => {
     return error
   }
 
-  return (data.readUInt16LE(position) - 0x3000) / 20
+  return Math.round((data.readUInt16LE(position) - 0x3000) / 2) / 10
 }
 
 const parseHumidity = (data, position) => {
