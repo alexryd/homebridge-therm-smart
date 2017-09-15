@@ -13,6 +13,10 @@ const bcdByteToInt = b => {
   return (((b & 0xf0) >> 4) * 10) + (b & 0xf)
 }
 
+const intToBCDByte = i => {
+  return ((i / 10) << 4) + (i % 10)
+}
+
 class ThermSmart extends EventEmitter {
   static powerOn() {
     if (noble.state === 'poweredOn') {
@@ -260,6 +264,24 @@ class ThermSmart extends EventEmitter {
           bcdByteToInt(data[7])
         )
       })
+  }
+
+  syncTime() {
+    const now = new Date()
+
+    return this.write(
+      Buffer.from([
+        0xd1,
+        0x00,
+        intToBCDByte(now.getFullYear() - 2000),
+        intToBCDByte(now.getMonth() + 1),
+        intToBCDByte(now.getDate()),
+        intToBCDByte(now.getHours()),
+        intToBCDByte(now.getMinutes()),
+        intToBCDByte(now.getSeconds())
+      ]),
+      0xd1
+    )
   }
 }
 

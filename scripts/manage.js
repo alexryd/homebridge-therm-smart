@@ -93,8 +93,18 @@ const readTime = device => {
   })
 }
 
+const syncTime = device => {
+  console.log(colors.gray('Synchronizing time...'))
+
+  device.syncTime().then(() => {
+    console.log('Time successfully synchronized')
+    process.exit()
+  })
+}
+
 const validCommands = [
   'read-time',
+  'sync-time',
 ]
 const { command } = commandLineCommands(validCommands.concat([null]))
 
@@ -116,6 +126,8 @@ if (command === null) {
     .then(() => {
       if (command === 'read-time') {
         readTime(device)
+      } else if (command === 'sync-time') {
+        syncTime(device)
       }
     })
     .catch(error => {
