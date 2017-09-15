@@ -102,9 +102,19 @@ const syncTime = device => {
   })
 }
 
+const identify = device => {
+  console.log(colors.gray('Identifying...'))
+
+  device.identify().then(() => {
+    console.log('LED is on for 5 seconds')
+    process.exit()
+  })
+}
+
 const validCommands = [
   'read-time',
   'sync-time',
+  'identify',
 ]
 const { command } = commandLineCommands(validCommands.concat([null]))
 
@@ -128,6 +138,8 @@ if (command === null) {
         readTime(device)
       } else if (command === 'sync-time') {
         syncTime(device)
+      } else if (command === 'identify') {
+        identify(device)
       }
     })
     .catch(error => {

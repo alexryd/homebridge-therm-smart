@@ -240,13 +240,18 @@ class ThermSmart extends EventEmitter {
           resolve(receivedData)
         }
       }
-      this.notifyCharacteristic.on('data', dataHandler)
+
+      if (responseCommand !== null) {
+        this.notifyCharacteristic.on('data', dataHandler)
+      }
 
       this.writeCharacteristic.write(data, false, error => {
         this.emit('write', data, error)
         if (error) {
           this.notifyCharacteristic.removeListener('data', dataHandler)
           reject(error)
+        } else if (responseCommand === null) {
+          resolve()
         }
       })
     })
@@ -282,6 +287,10 @@ class ThermSmart extends EventEmitter {
       ]),
       0xd1
     )
+  }
+
+  identify() {
+    return this.write(Buffer.from([0xd5]), null)
   }
 }
 
