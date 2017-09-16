@@ -1,36 +1,60 @@
-const ThermSmartSensor = require('./therm-smart-sensor')
+const ThermSmart = require('./therm-smart')
 
 module.exports = homebridge => {
   const Characteristic = homebridge.hap.Characteristic
   const Service = homebridge.hap.Service
 
-  class ThermSmartSensorAccessory {
+  class ThermSmartAccessory {
     constructor(log, config) {
       this.log = log
       this.config = config
-      this.sensor = new ThermSmartSensor(config, log)
+
+      this.data = {
+        'battery-level': 0,
+        'indoor-temperature': 0,
+        'indoor-humidity': 0,
+        'outdoor-temperature': 0,
+      }
+
+      this.startScan()
+    }
+
+    startScan() {
+      const readingHandler = reading => {
+        let name = reading.type
+        if (reading.sensor) {
+          name = reading.sensor + '-' + name
+        }
+
+        if (this.data.hasOwnProperty(name)) {
+          this.data[name] = reading.value
+        }
+      }
+
+      const address = this.config.address
+        ? this.config.address.toLowerCase().replace(/:/g, '')
+        : null
+
+      this.log('Scanning for sensor readings')
+
+      ThermSmart.scanForReadings(readingHandler, address)
+        .then(() => {
+          this.log('Stopped scanning for sensor readings')
+        })
+        .catch(error => {
+          this.log('An error occurred while scanning for sensor readings:', error)
+        })
     }
 
     getBatteryLevel(callback) {
-      this.sensor.getBatteryLevel()
-        .then(level => {
-          callback(null, level)
-        })
-        .catch(error => {
-          callback(error)
-        })
+      callback(null, this.data['battery-level'])
     }
 
     getLowBatteryStatus(callback) {
-      this.sensor.getBatteryLevel()
-        .then(level => {
-          const c = Characteristic.StatusLowBattery
-          const status = level < 10 ? c.BATTERY_LEVEL_LOW : c.BATTERY_LEVEL_NORMAL
-          callback(null, status)
-        })
-        .catch(error => {
-          callback(error)
-        })
+      const batteryLevel = this.data['battery-level']
+      const c = Characteristic.StatusLowBattery
+      const status = batteryLevel < 10 ? c.BATTERY_LEVEL_LOW : c.BATTERY_LEVEL_NORMAL
+      callback(null, status)
     }
 
     getBatteryService() {
@@ -51,13 +75,7 @@ module.exports = homebridge => {
     }
 
     getIndoorTemperature(callback) {
-      this.sensor.getIndoorTemperature()
-        .then(temperature => {
-          callback(null, temperature)
-        })
-        .catch(error => {
-          callback(error)
-        })
+      callback(null, this.data['indoor-temperature'])
     }
 
     getIndoorTemperatureService() {
@@ -68,19 +86,14 @@ module.exports = homebridge => {
 
       service
         .getCharacteristic(Characteristic.CurrentTemperature)
+        .setProps({ minValue: -100 })
         .on('get', this.getIndoorTemperature.bind(this))
 
       return service
     }
 
     getRelativeHumidity(callback) {
-      this.sensor.getRelativeHumidity()
-        .then(humidity => {
-          callback(null, humidity)
-        })
-        .catch(error => {
-          callback(error)
-        })
+      callback(null, this.data['indoor-humidity'])
     }
 
     getRelativeHumidityService() {
@@ -96,13 +109,7 @@ module.exports = homebridge => {
     }
 
     getOutdoorTemperature(callback) {
-      this.sensor.getOutdoorTemperature()
-        .then(temperature => {
-          callback(null, temperature)
-        })
-        .catch(error => {
-          callback(error)
-        })
+      callback(null, this.data['outdoor-temperature'])
     }
 
     getOutdoorTemperatureService() {
@@ -113,6 +120,7 @@ module.exports = homebridge => {
 
       service
         .getCharacteristic(Characteristic.CurrentTemperature)
+        .setProps({ minValue: -100 })
         .on('get', this.getOutdoorTemperature.bind(this))
 
       return service
@@ -137,8 +145,8 @@ module.exports = homebridge => {
   }
 
   homebridge.registerAccessory(
-    'homebridge-thermsmart-sensor',
-    'ThermSmartSensor',
-    ThermSmartSensorAccessory
+    'homebridge-therm-smart',
+    'ThermSmart',
+    ThermSmartAccessory
   )
 }
