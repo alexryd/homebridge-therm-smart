@@ -4,6 +4,10 @@
   "description": "THERMSmart Sensor plugin for homebridge",
   "author": "Alexander Rydén",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alexryd/homebridge-therm-smart"
+  },
   "main": "index.js",
   "keywords": [
     "homebridge-plugin"
