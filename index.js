@@ -44,9 +44,7 @@ module.exports = homebridge => {
     }
 
     getBatteryService() {
-      const service = new Service.BatteryService(
-        this.config.batteryServiceName || this.config.name + ' Battery'
-      )
+      const service = new Service.BatteryService(this.config.name + ' Battery')
 
       this.characteristics['battery-level'] = service
         .getCharacteristic(Characteristic.BatteryLevel)
@@ -61,7 +59,7 @@ module.exports = homebridge => {
 
     getIndoorTemperatureService() {
       const service = new Service.TemperatureSensor(
-        this.config.indoorTemperatureSensorName || this.config.name + ' Indoor Temperature',
+        this.config.name + (this.config.sensor === 'all' ? ' Indoor ' : ' ') + 'Temperature',
         'indoor'
       )
 
@@ -74,7 +72,7 @@ module.exports = homebridge => {
 
     getRelativeHumidityService() {
       const service = new Service.HumiditySensor(
-        this.config.humiditySensorName || this.config.name + ' Humidity'
+        this.config.name + (this.config.sensor === 'all' ? ' Indoor ' : ' ') + ' Humidity'
       )
 
       this.characteristics['indoor-humidity'] = service
@@ -85,7 +83,7 @@ module.exports = homebridge => {
 
     getOutdoorTemperatureService() {
       const service = new Service.TemperatureSensor(
-        this.config.outdoorTemperatureSensorName || this.config.name + ' Outdoor Temperature',
+        this.config.name + (this.config.sensor === 'all' ? ' Outdoor ' : ' ') + ' Temperature',
         'outdoor'
       )
 
@@ -108,12 +106,25 @@ module.exports = homebridge => {
     }
 
     getServices() {
-      const services = [
-        this.getBatteryService(),
-        this.getIndoorTemperatureService(),
-        this.getRelativeHumidityService(),
-        this.getOutdoorTemperatureService()
-      ]
+      const services = [ this.getBatteryService() ]
+
+      const sensor = this.config.sensor || 'all'
+      if (sensor === 'indoor') {
+        services.push(
+          this.getIndoorTemperatureService(),
+          this.getRelativeHumidityService()
+        )
+      } else if (sensor === 'outdoor') {
+        services.push(this.getOutdoorTemperatureService())
+      } else if (sensor === 'all') {
+        services.push(
+          this.getIndoorTemperatureService(),
+          this.getRelativeHumidityService(),
+          this.getOutdoorTemperatureService()
+        )
+      } else {
+        this.log('Unknown sensor specified. Must be one of either "indoor", "outdoor" or "all".')
+      }
 
       services[0].getCharacteristic(Characteristic.BatteryLevel)
         .on('change', this.setLowBatteryStatus.bind(this, services))
