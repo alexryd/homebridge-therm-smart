@@ -1,5 +1,5 @@
 {
-  "name": "homebridge-thermsmart-sensor",
+  "name": "homebridge-therm-smart",
   "version": "0.0.1",
   "description": "THERMSmart Sensor plugin for homebridge",
   "author": "Alexander Rydén",
