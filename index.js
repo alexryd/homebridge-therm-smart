@@ -34,7 +34,7 @@ module.exports = homebridge => {
 
       this.log('Scanning for sensor readings')
 
-      ThermSmart.scanForReadings(readingHandler, address)
+      ThermSmart.scanForReadings(readingHandler, [address])
         .then(() => {
           this.log('Stopped scanning for sensor readings')
         })
