@@ -8,13 +8,7 @@ module.exports = homebridge => {
     constructor(log, config) {
       this.log = log
       this.config = config
-
-      this.data = {
-        'battery-level': 0,
-        'indoor-temperature': 0,
-        'indoor-humidity': 0,
-        'outdoor-temperature': 0,
-      }
+      this.characteristics = {}
 
       this.startScan()
     }
@@ -26,8 +20,11 @@ module.exports = homebridge => {
           name = reading.sensor + '-' + name
         }
 
-        if (this.data.hasOwnProperty(name)) {
-          this.data[name] = reading.value
+        if (this.characteristics.hasOwnProperty(name)) {
+          const characteristic = this.characteristics[name]
+          if (reading.value !== characteristic.value) {
+            characteristic.setValue(reading.value)
+          }
         }
       }
 
@@ -46,25 +43,13 @@ module.exports = homebridge => {
         })
     }
 
-    getBatteryLevel(callback) {
-      callback(null, this.data['battery-level'])
-    }
-
-    getLowBatteryStatus(callback) {
-      const batteryLevel = this.data['battery-level']
-      const c = Characteristic.StatusLowBattery
-      const status = batteryLevel < 10 ? c.BATTERY_LEVEL_LOW : c.BATTERY_LEVEL_NORMAL
-      callback(null, status)
-    }
-
     getBatteryService() {
       const service = new Service.BatteryService(
         this.config.batteryServiceName || this.config.name + ' Battery'
       )
 
-      service
+      this.characteristics['battery-level'] = service
         .getCharacteristic(Characteristic.BatteryLevel)
-        .on('get', this.getBatteryLevel.bind(this))
 
       service.setCharacteristic(
         Characteristic.ChargingState,
@@ -74,26 +59,17 @@ module.exports = homebridge => {
       return service
     }
 
-    getIndoorTemperature(callback) {
-      callback(null, this.data['indoor-temperature'])
-    }
-
     getIndoorTemperatureService() {
       const service = new Service.TemperatureSensor(
         this.config.indoorTemperatureSensorName || this.config.name + ' Indoor Temperature',
         'indoor'
       )
 
-      service
+      this.characteristics['indoor-temperature'] = service
         .getCharacteristic(Characteristic.CurrentTemperature)
         .setProps({ minValue: -100 })
-        .on('get', this.getIndoorTemperature.bind(this))
 
       return service
-    }
-
-    getRelativeHumidity(callback) {
-      callback(null, this.data['indoor-humidity'])
     }
 
     getRelativeHumidityService() {
@@ -101,15 +77,10 @@ module.exports = homebridge => {
         this.config.humiditySensorName || this.config.name + ' Humidity'
       )
 
-      service
+      this.characteristics['indoor-humidity'] = service
         .getCharacteristic(Characteristic.CurrentRelativeHumidity)
-        .on('get', this.getRelativeHumidity.bind(this))
 
       return service
-    }
-
-    getOutdoorTemperature(callback) {
-      callback(null, this.data['outdoor-temperature'])
     }
 
     getOutdoorTemperatureService() {
@@ -118,12 +89,22 @@ module.exports = homebridge => {
         'outdoor'
       )
 
-      service
+      this.characteristics['outdoor-temperature'] = service
         .getCharacteristic(Characteristic.CurrentTemperature)
         .setProps({ minValue: -100 })
-        .on('get', this.getOutdoorTemperature.bind(this))
 
       return service
+    }
+
+    setLowBatteryStatus(services, { oldValue, newValue }) {
+      const c = Characteristic.StatusLowBattery
+      const status = newValue < 10 ? c.BATTERY_LEVEL_LOW : c.BATTERY_LEVEL_NORMAL
+
+      for (const service of services) {
+        service
+          .getCharacteristic(Characteristic.StatusLowBattery)
+          .setValue(status)
+      }
     }
 
     getServices() {
@@ -134,11 +115,8 @@ module.exports = homebridge => {
         this.getOutdoorTemperatureService()
       ]
 
-      for (const service of services) {
-        service
-          .getCharacteristic(Characteristic.StatusLowBattery)
-          .on('get', this.getLowBatteryStatus.bind(this))
-      }
+      services[0].getCharacteristic(Characteristic.BatteryLevel)
+        .on('change', this.setLowBatteryStatus.bind(this, services))
 
       return services
     }
