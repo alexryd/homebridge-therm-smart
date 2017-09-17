@@ -28,13 +28,13 @@ module.exports = homebridge => {
         }
       }
 
-      const address = this.config.address
-        ? this.config.address.toLowerCase().replace(/:/g, '')
+      const addresses = this.config.address
+        ? [ this.config.address.toLowerCase().replace(/:/g, '') ]
         : null
 
       this.log('Scanning for sensor readings')
 
-      ThermSmart.scanForReadings(readingHandler, [address])
+      ThermSmart.scanForReadings(readingHandler, addresses)
         .then(() => {
           this.log('Stopped scanning for sensor readings')
         })
