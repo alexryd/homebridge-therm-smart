@@ -2,7 +2,6 @@
 
 const colors = require('colors/safe')
 const commandLineCommands = require('command-line-commands')
-const moment = require('moment')
 const prompt = require('prompt')
 const ThermSmart = require('../therm-smart')
 
@@ -88,7 +87,7 @@ const readTime = device => {
   console.log(colors.gray('Reading time...'))
 
   device.readTime().then(time => {
-    console.log('Time:', moment(time).format('YYYY-MM-DD HH:mm:ss'))
+    console.log('Time:', time.toString())
     process.exit()
   })
 }
