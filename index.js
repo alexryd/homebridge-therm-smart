@@ -1,3 +1,4 @@
+const packageVersion = require('./package.json').version
 const ThermSmart = require('./therm-smart')
 
 module.exports = homebridge => {
@@ -21,6 +22,9 @@ module.exports = homebridge => {
     configureAccessory(accessory) {
       accessory.reachable = true
 
+      accessory.getService(Service.AccessoryInformation)
+        .setCharacteristic(Characteristic.FirmwareRevision, packageVersion)
+
       this.accessories.push(accessory)
     }
 
@@ -29,7 +33,8 @@ module.exports = homebridge => {
         throw new Error('Accessory must have a type and an address')
       }
 
-      const name = `ThermSmart ${type.charAt(0).toUpperCase()}${type.slice(1)} sensor`
+      const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1)
+      const name = `ThermSmart ${capitalizedType} sensor`
       const uuid = UUIDGen.generate(name)
       const accessory = new Accessory(name, uuid)
       const ctx = accessory.context
@@ -50,6 +55,12 @@ module.exports = homebridge => {
           Characteristic.ChargingState,
           Characteristic.ChargingState.NOT_CHARGING
         )
+
+      accessory.getService(Service.AccessoryInformation)
+        .setCharacteristic(Characteristic.Manufacturer, 'ThermSmart')
+        .setCharacteristic(Characteristic.Model, `${capitalizedType} sensor`)
+        .setCharacteristic(Characteristic.SerialNumber, address)
+        .setCharacteristic(Characteristic.FirmwareRevision, packageVersion)
 
       this.accessories.push(accessory)
       this.api.registerPlatformAccessories('homebridge-therm-smart', 'ThermSmart', [accessory])
