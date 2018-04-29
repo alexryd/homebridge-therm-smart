@@ -13,6 +13,7 @@ module.exports = homebridge => {
       this.config = config
       this.api = api
       this.accessories = []
+      this.scanTimeout = null
 
       this.api.on('didFinishLaunching', () => {
         this.scan()
@@ -125,18 +126,30 @@ module.exports = homebridge => {
     }
 
     scan() {
+      if (this.scanTimeout !== null) {
+        clearTimeout(this.scanTimeout)
+      }
+
+      this.scanTimeout = setTimeout(() => {
+        ThermSmart.stopScan()
+      }, this.config.scanTime || 10 * 1000)
+
       const addresses = this.config.addresses
         ? this.config.addresses.map(a => a.toLowerCase().replace(/:/g, ''))
         : null
 
-      this.log('Scanning for sensor readings')
-
       ThermSmart.scanForReadings(this.readingHandler.bind(this), addresses)
-        .then(() => {
-          this.log('Stopped scanning for sensor readings')
-        })
         .catch(error => {
           this.log('An error occurred while scanning for sensor readings:', error)
+        })
+        .then(() => {
+          if (this.scanTimeout === null) {
+            clearTimeout(this.scanTimeout)
+          }
+
+          this.scanTimeout = setTimeout(() => {
+            this.scan()
+          }, this.scanIdleTime || 2 * 60 * 1000)
         })
     }
 
