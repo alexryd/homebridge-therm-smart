@@ -1,40 +1,122 @@
 const ThermSmart = require('./therm-smart')
 
 module.exports = homebridge => {
+  const Accessory = homebridge.platformAccessory
   const Characteristic = homebridge.hap.Characteristic
   const Service = homebridge.hap.Service
+  const UUIDGen = homebridge.hap.uuid
 
-  class ThermSmartAccessory {
-    constructor(log, config) {
+  class ThermSmartPlatform {
+    constructor(log, config, api) {
       this.log = log
       this.config = config
-      this.characteristics = {}
+      this.api = api
+      this.accessories = []
 
-      this.startScan()
+      this.api.on('didFinishLaunching', () => {
+        this.scan()
+      })
     }
 
-    startScan() {
-      const readingHandler = reading => {
-        let name = reading.type
-        if (reading.sensor) {
-          name = reading.sensor + '-' + name
-        }
+    configureAccessory(accessory) {
+      accessory.reachable = true
 
-        if (this.characteristics.hasOwnProperty(name)) {
-          const characteristic = this.characteristics[name]
-          if (reading.value !== characteristic.value) {
-            characteristic.setValue(reading.value)
-          }
-        }
+      this.accessories.push(accessory)
+    }
+
+    addAccessory(type, address) {
+      if (!type || !address) {
+        throw new Error('Accessory must have a type and an address')
       }
 
+      const name = `ThermSmart ${type.charAt(0).toUpperCase()}${type.slice(1)} sensor`
+      const uuid = UUIDGen.generate(name)
+      const accessory = new Accessory(name, uuid)
+      const ctx = accessory.context
+
+      ctx.type = type
+      ctx.address = address
+
+      accessory.addService(Service.TemperatureSensor, name + ' temperature')
+        .getCharacteristic(Characteristic.CurrentTemperature)
+        .setProps({ minValue: -100 })
+
+      if (type === 'indoor') {
+        accessory.addService(Service.HumiditySensor, name + ' humidity')
+      }
+
+      accessory.addService(Service.BatteryService, name + ' battery')
+        .setCharacteristic(
+          Characteristic.ChargingState,
+          Characteristic.ChargingState.NOT_CHARGING
+        )
+
+      this.accessories.push(accessory)
+      this.api.registerPlatformAccessories('homebridge-therm-smart', 'ThermSmart', [accessory])
+
+      return accessory
+    }
+
+    getAccessory(type, address) {
+      for (let accessory of this.accessories) {
+        const ctx = accessory.context
+        if (ctx.type === type && ctx.address === address) {
+          return accessory
+        }
+      }
+      return null
+    }
+
+    readingHandler(reading, peripheral) {
+      const address = peripheral.address
+      if (!address) {
+        return
+      }
+
+      if (!reading.sensor) {
+        if (reading.type === 'battery-level') {
+          const level = reading.value
+          const SLB = Characteristic.StatusLowBattery
+          const status = level < 10 ? SLB.BATTERY_LEVEL_LOW : SLB.BATTERY_LEVEL_NORMAL
+
+          for (let accessory of this.accessories) {
+            if (accessory.context.address === address) {
+              const service = accessory.getService(Service.BatteryService)
+              service.getCharacteristic(Characteristic.BatteryLevel).setValue(level)
+              service.getCharacteristic(SLB).setValue(status)
+            }
+          }
+        }
+      } else {
+        if (reading.type !== 'temperature' && reading.type !== 'humidity') {
+          return
+        }
+
+        let accessory = this.getAccessory(reading.sensor, address)
+        if (!accessory) {
+          accessory = this.addAccessory(reading.sensor, address)
+        }
+
+        if (reading.type === 'temperature') {
+          accessory.getService(Service.TemperatureSensor)
+            .getCharacteristic(Characteristic.CurrentTemperature)
+            .setValue(reading.value)
+        } else if (reading.type === 'humidity') {
+          accessory.getService(Service.HumiditySensor)
+            .getCharacteristic(Characteristic.CurrentRelativeHumidity)
+            .setValue(reading.value)
+        }
+      }
+    }
+
+    scan() {
       const addresses = this.config.address
         ? [ this.config.address.toLowerCase().replace(/:/g, '') ]
         : null
 
       this.log('Scanning for sensor readings')
 
-      ThermSmart.scanForReadings(readingHandler, addresses)
+      ThermSmart.scanForReadings(this.readingHandler.bind(this), addresses)
         .then(() => {
           this.log('Stopped scanning for sensor readings')
         })
@@ -42,100 +124,12 @@ module.exports = homebridge => {
           this.log('An error occurred while scanning for sensor readings:', error)
         })
     }
-
-    getBatteryService() {
-      const service = new Service.BatteryService(this.config.name + ' Battery')
-
-      this.characteristics['battery-level'] = service
-        .getCharacteristic(Characteristic.BatteryLevel)
-
-      service.setCharacteristic(
-        Characteristic.ChargingState,
-        Characteristic.ChargingState.NOT_CHARGING
-      )
-
-      return service
-    }
-
-    getIndoorTemperatureService() {
-      const service = new Service.TemperatureSensor(
-        this.config.name + (this.config.sensor === 'all' ? ' Indoor ' : ' ') + 'Temperature',
-        'indoor'
-      )
-
-      this.characteristics['indoor-temperature'] = service
-        .getCharacteristic(Characteristic.CurrentTemperature)
-        .setProps({ minValue: -100 })
-
-      return service
-    }
-
-    getRelativeHumidityService() {
-      const service = new Service.HumiditySensor(
-        this.config.name + (this.config.sensor === 'all' ? ' Indoor ' : ' ') + ' Humidity'
-      )
-
-      this.characteristics['indoor-humidity'] = service
-        .getCharacteristic(Characteristic.CurrentRelativeHumidity)
-
-      return service
-    }
-
-    getOutdoorTemperatureService() {
-      const service = new Service.TemperatureSensor(
-        this.config.name + (this.config.sensor === 'all' ? ' Outdoor ' : ' ') + ' Temperature',
-        'outdoor'
-      )
-
-      this.characteristics['outdoor-temperature'] = service
-        .getCharacteristic(Characteristic.CurrentTemperature)
-        .setProps({ minValue: -100 })
-
-      return service
-    }
-
-    setLowBatteryStatus(services, { oldValue, newValue }) {
-      const c = Characteristic.StatusLowBattery
-      const status = newValue < 10 ? c.BATTERY_LEVEL_LOW : c.BATTERY_LEVEL_NORMAL
-
-      for (const service of services) {
-        service
-          .getCharacteristic(Characteristic.StatusLowBattery)
-          .setValue(status)
-      }
-    }
-
-    getServices() {
-      const services = [ this.getBatteryService() ]
-
-      const sensor = this.config.sensor || 'all'
-      if (sensor === 'indoor') {
-        services.push(
-          this.getIndoorTemperatureService(),
-          this.getRelativeHumidityService()
-        )
-      } else if (sensor === 'outdoor') {
-        services.push(this.getOutdoorTemperatureService())
-      } else if (sensor === 'all') {
-        services.push(
-          this.getIndoorTemperatureService(),
-          this.getRelativeHumidityService(),
-          this.getOutdoorTemperatureService()
-        )
-      } else {
-        this.log('Unknown sensor specified. Must be one of either "indoor", "outdoor" or "all".')
-      }
-
-      services[0].getCharacteristic(Characteristic.BatteryLevel)
-        .on('change', this.setLowBatteryStatus.bind(this, services))
-
-      return services
-    }
   }
 
-  homebridge.registerAccessory(
+  homebridge.registerPlatform(
     'homebridge-therm-smart',
     'ThermSmart',
-    ThermSmartAccessory
+    ThermSmartPlatform,
+    true
   )
 }
