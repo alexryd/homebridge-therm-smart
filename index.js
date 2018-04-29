@@ -22,6 +22,9 @@ module.exports = homebridge => {
     }
 
     configureAccessory(accessory) {
+      const ctx = accessory.context
+      this.log(`Loading ${ctx.type} sensor with address ${ctx.address} from cache`)
+
       accessory.reachable = true
 
       accessory.getService(Service.AccessoryInformation)
@@ -40,6 +43,8 @@ module.exports = homebridge => {
       const uuid = UUIDGen.generate(name)
       const accessory = new Accessory(name, uuid)
       const ctx = accessory.context
+
+      this.log(`Adding new ${type} sensor with address ${address}`)
 
       ctx.type = type
       ctx.address = address
@@ -168,6 +173,8 @@ module.exports = homebridge => {
         }
 
         if (toRemove.length > 0) {
+          this.log(`Removing ${toRemove.length} stale accessories`)
+
           this.api.unregisterPlatformAccessories(
             'homebridge-therm-smart',
             'ThermSmart',
