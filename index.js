@@ -16,6 +16,7 @@ module.exports = homebridge => {
 
       this.api.on('didFinishLaunching', () => {
         this.scan()
+        this.startPeriodicCleaning()
       })
     }
 
@@ -41,6 +42,7 @@ module.exports = homebridge => {
 
       ctx.type = type
       ctx.address = address
+      ctx.lastUpdated = Date.now()
 
       accessory.addService(Service.TemperatureSensor, name + ' temperature')
         .getCharacteristic(Characteristic.CurrentTemperature)
@@ -108,6 +110,8 @@ module.exports = homebridge => {
           accessory = this.addAccessory(reading.sensor, address)
         }
 
+        accessory.context.lastUpdated = Date.now()
+
         if (reading.type === 'temperature') {
           accessory.getService(Service.TemperatureSensor)
             .getCharacteristic(Characteristic.CurrentTemperature)
@@ -134,6 +138,32 @@ module.exports = homebridge => {
         .catch(error => {
           this.log('An error occurred while scanning for sensor readings:', error)
         })
+    }
+
+    startPeriodicCleaning() {
+      const cleanUpInterval = this.config.cleanUpInterval || 5 * 60 * 1000
+      const maxStaleTime = this.config.maxStaleTime || 15 * 60 * 1000
+
+      setInterval(() => {
+        const toRemove = []
+        const now = Date.now()
+
+        for (let accessory of this.accessories) {
+          if (now - accessory.context.lastUpdated > maxStaleTime) {
+            toRemove.push(accessory)
+          }
+        }
+
+        if (toRemove.length > 0) {
+          this.api.unregisterPlatformAccessories(
+            'homebridge-therm-smart',
+            'ThermSmart',
+            toRemove
+          )
+
+          this.accessories = this.accessories.filter(a => !toRemove.includes(a))
+        }
+      }, cleanUpInterval)
     }
   }
 
