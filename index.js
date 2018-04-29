@@ -121,8 +121,8 @@ module.exports = homebridge => {
     }
 
     scan() {
-      const addresses = this.config.address
-        ? [ this.config.address.toLowerCase().replace(/:/g, '') ]
+      const addresses = this.config.addresses
+        ? this.config.addresses.map(a => a.toLowerCase().replace(/:/g, ''))
         : null
 
       this.log('Scanning for sensor readings')
