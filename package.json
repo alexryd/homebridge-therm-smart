@@ -17,7 +17,7 @@
     "homebridge": ">=0.2.0"
   },
   "dependencies": {
-    "noble": "~1.8.0"
+    "noble": "~1.9.0"
   },
   "devDependencies": {
     "colors": "^1.1.2",
